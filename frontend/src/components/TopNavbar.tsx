@@ -1,11 +1,18 @@
 import React from 'react';
-import { Bell, User } from 'lucide-react';
+import { Bell } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface TopNavbarProps {
     role: 'student' | 'teacher';
 }
 
 const TopNavbar: React.FC<TopNavbarProps> = ({ role }) => {
+    const { user } = useAuth();
+
+    const initials = user
+        ? user.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
+        : role === 'student' ? 'S' : 'T';
+
     return (
         <div className="top-navbar">
             <div className="flex items-center gap-4">
@@ -13,12 +20,14 @@ const TopNavbar: React.FC<TopNavbarProps> = ({ role }) => {
                     <Bell size={20} />
                 </button>
                 <div className="profile-menu">
-                    <div className="avatar">
-                        {role === 'student' ? 'S' : 'T'}
-                    </div>
+                    <div className="avatar">{initials}</div>
                     <div className="flex flex-col">
-                        <span className="text-sm font-semibold">{role === 'student' ? 'Alex Student' : 'Prof. Teacher'}</span>
-                        <span className="text-xs text-muted" style={{ textTransform: 'capitalize' }}>{role} Profile</span>
+                        <span className="text-sm font-semibold">
+                            {user?.name || (role === 'student' ? 'Student' : 'Teacher')}
+                        </span>
+                        <span className="text-xs" style={{ color: 'var(--muted)', textTransform: 'capitalize' }}>
+                            {role} Profile
+                        </span>
                     </div>
                 </div>
             </div>

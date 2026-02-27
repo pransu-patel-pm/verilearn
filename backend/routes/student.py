@@ -1,13 +1,14 @@
 """
-Student Routes — Assignment submission, dashboard, results (PostgreSQL).
+Student Routes — Assignment submission, dashboard, results (PostgreSQL + JWT Auth).
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from datetime import datetime
 
 from database.connection import get_db
+from models.user_model import User
 from models.assignment_model import (
     Assignment,
     AssignmentSubmit,
@@ -31,11 +32,9 @@ from services.scoring_service import (
     compute_growth_trend,
 )
 from services.recommendation_service import aggregate_weak_topics_from_list
+from routes.deps import require_student
 
 router = APIRouter(prefix="/student", tags=["Student"])
-
-# Demo student ID (replace with JWT extraction in production)
-DEMO_STUDENT_ID = 1
 
 
 # ---------- Helpers ----------
@@ -66,18 +65,12 @@ def _assignment_to_radar(a: Assignment) -> RadarScores:
 @router.post("/submit-assignment", status_code=status.HTTP_201_CREATED)
 async def submit_assignment(
     payload: AssignmentSubmit,
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Submit an assignment for AI analysis.
-
-    Pipeline:
-    1. Generate follow-up questions
-    2. Extract weak topics
-    3. Evaluate understanding
-    4. Calculate weighted scores
-    5. Get book recommendations
-    6. Store in PostgreSQL
+    Requires student JWT authentication.
     """
 
     # Step 1: AI follow-up questions
@@ -114,7 +107,7 @@ async def submit_assignment(
 
     # Create assignment row
     assignment = Assignment(
-        student_id=DEMO_STUDENT_ID,
+        student_id=current_user.id,
         text=payload.text,
         subject=payload.subject,
         followup_questions=followup_questions,
@@ -152,15 +145,16 @@ async def submit_assignment(
 @router.post("/submit-followup")
 async def submit_followup(
     payload: FollowUpResponsePayload,
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Submit responses to AI follow-up questions.
-    Re-evaluates understanding with the additional context.
-    """
+    """Submit responses to AI follow-up questions. Re-evaluates understanding."""
 
     result = await db.execute(
-        select(Assignment).where(Assignment.id == payload.assignment_id)
+        select(Assignment).where(
+            Assignment.id == payload.assignment_id,
+            Assignment.student_id == current_user.id,
+        )
     )
     assignment = result.scalar_one_or_none()
 
@@ -170,7 +164,6 @@ async def submit_followup(
             detail="Assignment not found.",
         )
 
-    # Re-evaluate with follow-up responses
     eval_scores = await evaluate_understanding(assignment.text, payload.responses)
 
     score_breakdown = calculate_final_score(
@@ -190,7 +183,6 @@ async def submit_followup(
 
     ai_dep = await calculate_ai_dependency(assignment.text, payload.responses)
 
-    # Update record
     assignment.student_responses = payload.responses
     assignment.concept_clarity = score_breakdown.concept_clarity
     assignment.application = score_breakdown.application
@@ -216,19 +208,15 @@ async def submit_followup(
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
-async def get_dashboard(db: AsyncSession = Depends(get_db)):
-    """
-    Return student dashboard overview:
-    - Overall score history
-    - Weak topic summary
-    - AI dependency score
-    - Growth trend
-    """
-    student_id = DEMO_STUDENT_ID
+async def get_dashboard(
+    current_user: User = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return student dashboard overview. Requires student JWT."""
 
     result = await db.execute(
         select(Assignment)
-        .where(Assignment.student_id == student_id)
+        .where(Assignment.student_id == current_user.id)
         .order_by(Assignment.created_at.asc())
     )
     assignments = result.scalars().all()
@@ -243,7 +231,6 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             growth_trend=0,
         )
 
-    # Build history
     score_history = []
     score_values = []
     ai_deps = []
@@ -258,13 +245,8 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         ai_deps.append(a.ai_dependency_score)
         all_weak.append(a.weak_topics or [])
 
-    # Aggregate weak topics
     weak_topic_summary = aggregate_weak_topics_from_list(all_weak)
-
-    # Growth trend
     growth = compute_growth_trend(score_values)
-
-    # Average AI dependency
     avg_ai_dep = sum(ai_deps) / len(ai_deps) if ai_deps else 0
 
     return DashboardResponse(
@@ -278,11 +260,18 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/results/{assignment_id}", response_model=AssignmentResultResponse)
-async def get_results(assignment_id: int, db: AsyncSession = Depends(get_db)):
+async def get_results(
+    assignment_id: int,
+    current_user: User = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
+):
     """Return detailed results for a specific assignment."""
 
     result = await db.execute(
-        select(Assignment).where(Assignment.id == assignment_id)
+        select(Assignment).where(
+            Assignment.id == assignment_id,
+            Assignment.student_id == current_user.id,
+        )
     )
     assignment = result.scalar_one_or_none()
 

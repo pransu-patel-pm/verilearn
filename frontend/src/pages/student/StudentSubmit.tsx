@@ -1,22 +1,53 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, BookOpen, Send, Loader2 } from 'lucide-react';
+import { apiSubmitAssignment, apiSubmitFollowup } from '../../api/client';
 
 const StudentSubmit: React.FC = () => {
+    const [text, setText] = useState('');
+    const [subject, setSubject] = useState('General');
     const [analyzing, setAnalyzing] = useState(false);
     const [showQuestions, setShowQuestions] = useState(false);
+    const [questions, setQuestions] = useState<any[]>([]);
+    const [assignmentId, setAssignmentId] = useState<number | null>(null);
+    const [responses, setResponses] = useState<Record<string, string>>({});
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    const handleAnalyze = () => {
+    const handleAnalyze = async () => {
+        if (text.trim().length < 20) {
+            setError('Please enter at least 20 characters.');
+            return;
+        }
+        setError('');
         setAnalyzing(true);
-        setTimeout(() => {
-            setAnalyzing(false);
+
+        try {
+            const res = await apiSubmitAssignment(text, subject);
+            setQuestions(res.followup_questions || []);
+            setAssignmentId(res.assignment_id);
             setShowQuestions(true);
-        }, 2000);
+        } catch (err: any) {
+            setError(err.message || 'Failed to analyze. Is the backend running?');
+        } finally {
+            setAnalyzing(false);
+        }
     };
 
-    const handleSubmit = () => {
-        navigate('/student/results');
+    const handleSubmitFollowup = async () => {
+        if (!assignmentId) return;
+        setSubmitting(true);
+        setError('');
+
+        try {
+            await apiSubmitFollowup(assignmentId, responses);
+            navigate(`/student/results/${assignmentId}`);
+        } catch (err: any) {
+            setError(err.message || 'Failed to submit follow-up.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -29,15 +60,44 @@ const StudentSubmit: React.FC = () => {
                 <p>Paste your essay, code, or explanation below.</p>
             </div>
 
+            {error && (
+                <div className="mb-4 text-sm" style={{
+                    padding: '10px 14px', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: 'var(--danger)', borderRadius: 'var(--radius-sm)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                }}>
+                    {error}
+                </div>
+            )}
+
             {!showQuestions ? (
                 <>
+                    <div className="form-group mb-2">
+                        <label htmlFor="subject">Subject</label>
+                        <input
+                            type="text"
+                            id="subject"
+                            className="input-field"
+                            placeholder="e.g. Data Structures"
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                        />
+                    </div>
+
                     <div className="form-group mb-4">
+                        <label htmlFor="assignment-text">Assignment Text</label>
                         <textarea
+                            id="assignment-text"
                             className="input-field"
                             rows={12}
-                            placeholder="Start typing your assignment response here..."
-                            style={{ padding: '16px', fontSize: '16px', lineHeight: '1.6', resize: 'vertical' }}
+                            placeholder="Start typing your assignment response here... (min 20 characters)"
+                            style={{ padding: '16px', fontSize: '15px', lineHeight: '1.6', resize: 'vertical' }}
+                            value={text}
+                            onChange={(e) => setText(e.target.value)}
                         ></textarea>
+                        <span className="text-xs" style={{ color: 'var(--muted)', textAlign: 'right' }}>
+                            {text.length} characters
+                        </span>
                     </div>
 
                     <div className="flex gap-4 mb-6">
@@ -51,57 +111,52 @@ const StudentSubmit: React.FC = () => {
                         <h3 className="mb-2">Ready for analysis?</h3>
                         <p className="text-sm mb-4">We'll evaluate your submission contextually and identify any conceptual gaps.</p>
                         <button
-                            className="btn btn-primary"
+                            className="btn btn-primary w-full"
                             onClick={handleAnalyze}
                             disabled={analyzing}
-                            style={{ width: '100%' }}
                         >
                             {analyzing ? (
                                 <>
-                                    <Loader2 className="animate-spin" size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                                    <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
                                     Analyzing Understanding...
                                 </>
                             ) : (
                                 'Analyze Understanding'
                             )}
                         </button>
-                        <style>{`
-              @keyframes spin { 100% { transform: rotate(360deg); } }
-            `}</style>
+                        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
                     </div>
                 </>
             ) : (
-                <div style={{ animation: 'fadeIn 0.5s ease-in-out' }}>
-                    <div className="card mb-6" style={{ backgroundColor: 'var(--surface-hover)', borderColor: 'var(--primary)' }}>
-                        <h2 className="text-primary mb-2 flex items-center gap-2">
-                            <span className="score-badge score-high" style={{ padding: '2px', width: '24px', height: '24px' }}>AI</span>
-                            Follow-up Question
-                        </h2>
-                        <p className="text-sm">
-                            I noticed you used dynamic programming for this problem. However, your base cases seem to omit the edge case where the array is empty. Can you explain how your code would handle that scenario, or how you would modify it to do so?
-                        </p>
-                    </div>
+                <div style={{ animation: 'fadeIn 0.4s ease' }}>
+                    {questions.map((q, i) => (
+                        <div key={q.id || i} className="card mb-4" style={{ backgroundColor: 'var(--surface-hover)', borderColor: 'var(--primary)' }}>
+                            <h2 className="text-primary mb-2 flex items-center gap-2 text-sm">
+                                <span className="score-badge score-high" style={{ padding: '2px 8px' }}>Q{i + 1}</span>
+                                Follow-up Question
+                            </h2>
+                            <p className="text-sm mb-4" style={{ color: 'var(--foreground)' }}>{q.question}</p>
 
-                    <div className="form-group mb-4">
-                        <label>Your Response to Follow-up</label>
-                        <textarea
-                            className="input-field mt-2"
-                            rows={5}
-                            placeholder="Explain your approach..."
-                        ></textarea>
-                    </div>
+                            <textarea
+                                className="input-field"
+                                rows={3}
+                                placeholder="Your response..."
+                                value={responses[q.id] || ''}
+                                onChange={(e) => setResponses({ ...responses, [q.id]: e.target.value })}
+                            ></textarea>
+                        </div>
+                    ))}
 
                     <button
                         className="btn btn-primary w-full"
-                        onClick={handleSubmit}
+                        onClick={handleSubmitFollowup}
+                        disabled={submitting}
                         style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}
                     >
-                        Submit Response <Send size={18} />
+                        {submitting ? 'Submitting...' : <>Submit Responses <Send size={18} /></>}
                     </button>
 
-                    <style>{`
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-          `}</style>
+                    <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }`}</style>
                 </div>
             )}
         </div>

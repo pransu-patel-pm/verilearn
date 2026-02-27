@@ -1,5 +1,5 @@
 """
-Teacher Routes — Class analytics, individual student analytics (PostgreSQL).
+Teacher Routes — Class analytics, individual student analytics (PostgreSQL + JWT Auth).
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -21,31 +21,23 @@ from services.recommendation_service import (
     compute_performance_distribution,
     generate_intervention_suggestions,
 )
+from routes.deps import require_teacher
 
 router = APIRouter(prefix="/teacher", tags=["Teacher"])
 
 
-# ---------- Routes ----------
-
-
 @router.get("/class-analytics", response_model=ClassAnalyticsResponse)
-async def get_class_analytics(db: AsyncSession = Depends(get_db)):
-    """
-    Calculate and return class-wide analytics:
-    - Class average score
-    - Most weak / strongest topic
-    - Performance distribution
-    - Score trends
-    - AI risk count
-    """
+async def get_class_analytics(
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """Class-wide analytics. Requires teacher JWT."""
 
-    # Count students
     student_count_result = await db.execute(
         select(sql_func.count(User.id)).where(User.role == "student")
     )
     student_count = student_count_result.scalar() or 0
 
-    # Get all assignments ordered by date
     result = await db.execute(
         select(Assignment).order_by(Assignment.created_at.asc())
     )
@@ -63,7 +55,6 @@ async def get_class_analytics(db: AsyncSession = Depends(get_db)):
             ai_risk_students=0,
         )
 
-    # Collect scores per student (latest score)
     student_latest_scores: dict[int, float] = {}
     all_scores: list[float] = []
     ai_risk_count = 0
@@ -79,14 +70,10 @@ async def get_class_analytics(db: AsyncSession = Depends(get_db)):
             ai_risk_count += 1
             seen_ai_risk.add(a.student_id)
 
-    # Class average
     class_avg = sum(all_scores) / len(all_scores) if all_scores else 0
-
-    # Weak topics
     weak_topic_summary = aggregate_weak_topics_from_list(all_weak)
     most_weak = get_most_weak_topic(weak_topic_summary)
 
-    # Topic averages (by subject)
     topic_scores: dict[str, list[float]] = {}
     for a in all_assignments:
         subject = a.subject or "General"
@@ -97,12 +84,9 @@ async def get_class_analytics(db: AsyncSession = Depends(get_db)):
         for topic, s in topic_scores.items()
     ]
     strongest = get_strongest_topic(topic_averages)
-
-    # Performance distribution
     latest_scores = list(student_latest_scores.values())
     distribution = compute_performance_distribution(latest_scores)
 
-    # Score trend (group by date)
     score_trend: list[dict] = []
     date_scores: dict[str, list[float]] = {}
     for a in all_assignments:
@@ -128,29 +112,79 @@ async def get_class_analytics(db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.get("/students")
+async def list_students(
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all students with their latest scores for the teacher table."""
+
+    result = await db.execute(
+        select(User).where(User.role == "student").order_by(User.name)
+    )
+    students = result.scalars().all()
+
+    student_list = []
+    for s in students:
+        # Get latest assignment
+        a_result = await db.execute(
+            select(Assignment)
+            .where(Assignment.student_id == s.id)
+            .order_by(Assignment.created_at.desc())
+            .limit(1)
+        )
+        latest = a_result.scalar_one_or_none()
+
+        # Get all scores for trend
+        all_result = await db.execute(
+            select(Assignment.final_score)
+            .where(Assignment.student_id == s.id)
+            .order_by(Assignment.created_at.asc())
+        )
+        all_scores = [row[0] for row in all_result.all()]
+        growth = compute_growth_trend(all_scores)
+
+        weak_topic = "N/A"
+        if latest and latest.weak_topics:
+            weak_topic = latest.weak_topics[0]
+
+        score = latest.final_score if latest else 0
+        ai_dep = latest.ai_dependency_score if latest else 0
+
+        if score >= 80:
+            status_label = "Strong"
+        elif score >= 60:
+            status_label = "Stable"
+        else:
+            status_label = "At Risk"
+
+        student_list.append({
+            "id": s.id,
+            "name": s.name,
+            "score": round(score, 1),
+            "weak_topic": weak_topic,
+            "trend": f"{'+' if growth >= 0 else ''}{growth}%",
+            "status": status_label,
+            "ai_dependency": round(ai_dep, 1),
+        })
+
+    return student_list
+
+
 @router.get("/student/{student_id}", response_model=StudentAnalyticsResponse)
 async def get_student_analytics(
     student_id: int,
+    current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Return in-depth analytics for a specific student:
-    - Performance history
-    - Topic mastery (radar)
-    - AI risk score
-    - Growth trend
-    - Weak topic timeline
-    - Intervention suggestions
-    """
+    """Individual student analytics. Requires teacher JWT."""
 
-    # Find student
     user_result = await db.execute(
         select(User).where(User.id == student_id)
     )
     user = user_result.scalar_one_or_none()
     student_name = user.name if user else f"Student {student_id}"
 
-    # Get assignments
     result = await db.execute(
         select(Assignment)
         .where(Assignment.student_id == student_id)
@@ -164,7 +198,6 @@ async def get_student_analytics(
             detail="No assignments found for this student.",
         )
 
-    # Score history
     score_history: list[dict] = []
     score_values: list[float] = []
     ai_deps: list[float] = []
@@ -179,7 +212,6 @@ async def get_student_analytics(
         ai_deps.append(a.ai_dependency_score)
         all_weak_topics.extend(a.weak_topics or [])
 
-    # Latest radar scores
     latest = assignments[-1]
     radar = build_radar_scores(
         clarity=latest.radar_clarity,
@@ -189,13 +221,9 @@ async def get_student_analytics(
         retention=latest.radar_retention,
     )
 
-    # Growth trend
     growth = compute_growth_trend(score_values)
-
-    # AI dependency average
     avg_ai_dep = sum(ai_deps) / len(ai_deps) if ai_deps else 0
 
-    # Weak topic timeline
     topic_timeline: list[dict] = []
     for a in assignments:
         topics = a.weak_topics or []
@@ -206,13 +234,8 @@ async def get_student_analytics(
                 "detail": f"Struggled with {topics[0]} in this assignment.",
             })
 
-    # Unique weak topics
     unique_weak = list(dict.fromkeys(all_weak_topics))
-
-    # Intervention suggestions
-    suggestions = generate_intervention_suggestions(
-        unique_weak, avg_ai_dep, growth
-    )
+    suggestions = generate_intervention_suggestions(unique_weak, avg_ai_dep, growth)
 
     return StudentAnalyticsResponse(
         student_id=student_id,

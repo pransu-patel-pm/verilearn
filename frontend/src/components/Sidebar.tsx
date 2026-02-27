@@ -1,12 +1,16 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, BookOpen, BarChart2, Users, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
     role: 'student' | 'teacher';
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ role }) => {
+    const { logout } = useAuth();
+    const navigate = useNavigate();
+
     const studentLinks = [
         { to: '/student/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
         { to: '/student/submit', icon: <BookOpen size={20} />, label: 'Submit Assignment' },
@@ -19,6 +23,11 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
     ];
 
     const links = role === 'student' ? studentLinks : teacherLinks;
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
+    };
 
     return (
         <div className="sidebar">
@@ -38,10 +47,10 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
                 ))}
             </div>
             <div className="sidebar-nav" style={{ flex: 0, borderTop: '1px solid var(--border)' }}>
-                <NavLink to="/login" className="nav-item text-danger">
+                <button onClick={handleLogout} className="nav-item text-danger">
                     <LogOut size={20} />
                     Logout
-                </NavLink>
+                </button>
             </div>
         </div>
     );
