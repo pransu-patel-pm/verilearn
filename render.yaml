@@ -2,8 +2,9 @@ services:
   - type: web
     name: verilearn-api
     runtime: python
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port 10000
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -11,3 +12,5 @@ services:
         generateValue: true
       - key: GEMINI_API_KEY
         sync: false
+      - key: PYTHON_VERSION
+        value: "3.12.0"

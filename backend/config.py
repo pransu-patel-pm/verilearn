@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
     GEMINI_API_KEY: str = ""
+    PORT: int = 10000
 
     # JWT settings
     JWT_ALGORITHM: str = "HS256"
