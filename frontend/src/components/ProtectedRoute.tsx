@@ -1,13 +1,13 @@
-import React from 'react';
+import { type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 interface Props {
-    children: React.ReactNode;
+    children: ReactNode;
     role?: 'student' | 'teacher';
 }
 
-const ProtectedRoute: React.FC<Props> = ({ children, role }) => {
+const ProtectedRoute = ({ children, role }: Props) => {
     const { user, loading } = useAuth();
 
     if (loading) {

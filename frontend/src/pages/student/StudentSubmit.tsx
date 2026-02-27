@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, BookOpen, Send, Loader2 } from 'lucide-react';
 import { apiSubmitAssignment, apiSubmitFollowup } from '../../api/client';
 
-const StudentSubmit: React.FC = () => {
+const StudentSubmit = () => {
     const [text, setText] = useState('');
     const [subject, setSubject] = useState('General');
     const [analyzing, setAnalyzing] = useState(false);

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -6,7 +5,7 @@ interface TopNavbarProps {
     role: 'student' | 'teacher';
 }
 
-const TopNavbar: React.FC<TopNavbarProps> = ({ role }) => {
+const TopNavbar = ({ role }: TopNavbarProps) => {
     const { user } = useAuth();
 
     const initials = user

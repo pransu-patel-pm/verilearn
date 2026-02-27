@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -10,7 +10,7 @@ import { classPerformanceData } from '../../data/dummy';
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
 
-const TeacherDashboard: React.FC = () => {
+const TeacherDashboard = () => {
     const navigate = useNavigate();
     const [analytics, setAnalytics] = useState<any>(null);
     const [students, setStudents] = useState<any[]>([]);

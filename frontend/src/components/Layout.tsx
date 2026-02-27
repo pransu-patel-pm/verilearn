@@ -1,4 +1,3 @@
-import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopNavbar from './TopNavbar';
@@ -7,7 +6,7 @@ interface LayoutProps {
     role: 'student' | 'teacher';
 }
 
-const Layout: React.FC<LayoutProps> = ({ role }) => {
+const Layout = ({ role }: LayoutProps) => {
     return (
         <div className="app-container">
             <Sidebar role={role} />

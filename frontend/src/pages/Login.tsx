@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiLogin, apiRegister } from '../api/client';
 
-const Login: React.FC = () => {
+const Login = () => {
     const [role, setRole] = useState<'student' | 'teacher'>('student');
     const [isRegister, setIsRegister] = useState(false);
     const [name, setName] = useState('');

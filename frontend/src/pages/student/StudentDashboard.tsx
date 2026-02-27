@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { apiGetDashboard } from '../../api/client';
 import { learningData, weakTopicsData, recommendedBooks } from '../../data/dummy';
 
-const StudentDashboard: React.FC = () => {
+const StudentDashboard = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const [dashboard, setDashboard] = useState<any>(null);

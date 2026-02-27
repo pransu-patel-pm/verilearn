@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer
@@ -7,7 +7,7 @@ import { BookOpen, AlertCircle, Map } from 'lucide-react';
 import { apiGetResults } from '../../api/client';
 import { radarData as dummyRadar, recommendedBooks, weakTopicsData } from '../../data/dummy';
 
-const StudentResults: React.FC = () => {
+const StudentResults = () => {
     const { id } = useParams();
     const [result, setResult] = useState<any>(null);
     const [loading, setLoading] = useState(true);

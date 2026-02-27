@@ -1,4 +1,3 @@
-import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, BookOpen, BarChart2, Users, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +6,7 @@ interface SidebarProps {
     role: 'student' | 'teacher';
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ role }) => {
+const Sidebar = ({ role }: SidebarProps) => {
     const { logout } = useAuth();
     const navigate = useNavigate();
 
